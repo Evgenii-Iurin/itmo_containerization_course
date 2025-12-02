@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     
     model_provider: Literal["openai", "gigachat"] = "openai"
     model: BaseModelConfig | None = None
+    
+    # Database configuration
+    postgres_user: str = "booking_user"
+    postgres_password: str = "booking_password"
+    postgres_db: str = "beauty_booking"
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
+    
+    @property
+    def database_url(self) -> str:
+        """Construct PostgreSQL connection URL."""
+        return f"postgresql://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

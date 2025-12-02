@@ -92,6 +92,13 @@ A bot that automates manicure appointment booking by letting clients choose serv
 **Main `.env` file:**
 ```bash
 MODEL_PROVIDER=openai  # or "gigachat"
+
+# Database configuration
+POSTGRES_USER=booking_user
+POSTGRES_PASSWORD=booking_password
+POSTGRES_DB=beauty_booking
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
 ```
 
 **For OpenAI** - create `.env.openai_model`:
@@ -109,6 +116,23 @@ GIGACHAT_CREDENTIALS=path-to-credentials
 MODEL=GigaChat-Pro
 TEMPERATURE=0.5
 MAX_TOKENS=
+```
+
+### Database Setup
+
+**Start PostgreSQL with Docker Compose:**
+```bash
+docker-compose up -d postgres
+```
+
+This will:
+- Start PostgreSQL container
+- Create the database schema automatically from `init.sql`
+- Seed initial available slots for the next 2 weeks
+
+**Verify database is running:**
+```bash
+docker-compose ps
 ```
 
 ## Run application

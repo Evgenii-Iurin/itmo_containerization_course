@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: beauty_booking_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-booking_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-booking_password}
+      POSTGRES_DB: ${POSTGRES_DB:-beauty_booking}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-booking_user}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - beauty_booking_network
+
+volumes:
+  postgres_data:
+
+networks:
+  beauty_booking_network:
+    driver: bridge
+

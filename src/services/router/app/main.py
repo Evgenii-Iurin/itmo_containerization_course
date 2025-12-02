@@ -9,11 +9,24 @@ from services.router.app.dependencies import get_settings
 from services.router.app.models import ChatRequest, ChatResponse, HealthResponse
 from services.router.app.services.llm_service import OpenAPILLM
 from services.router.app.routers import router
+from services.router.app.database import Database
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan events."""
     settings = get_settings()
+    
+    # Initialize database
+    try:
+        db = Database(settings.database_url)
+        await db.connect()
+        app.state.db = db
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.warning(f"Failed to initialize database: {e}. Database features will be unavailable.")
+        app.state.db = None
+    
+    # Initialize LLM
     try:
         model_provider = settings.model_provider
 
@@ -35,16 +48,23 @@ async def lifespan(app: FastAPI):
             raise ValueError("Model is unavailable. Please, choose another model.")
 
         app.state.model = llm_client
+        logger.info("LLM model initialized successfully")
 
     except Exception as e:
-        logger.warning("Enable to initialize model. LLM capabilites will be unavailable")
-
+        logger.warning(f"Failed to initialize model: {e}. LLM capabilities will be unavailable.")
+        app.state.model = None
 
     yield
 
     logger.info("Shutting down Router service...")
     closing_tasks = []
 
+    # Close database
+    db = getattr(app.state, "db", None)
+    if db:
+        closing_tasks.append(db.close())
+    
+    # Close LLM
     llm = getattr(app.state, "model", None)
     if llm:
         closing_tasks.append(llm.close())

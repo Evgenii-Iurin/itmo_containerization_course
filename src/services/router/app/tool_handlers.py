@@ -33,7 +33,6 @@ async def handle_router_answer(
     
     display_router_decision(router_decision, iteration)
     
-    # Add router decision to conversation history
     tool_name = router_decision.action.tool
     decision_message = Message(
         role="assistant",

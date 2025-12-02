@@ -1,7 +1,8 @@
 import json
 from typing import Any
 from fastapi import APIRouter, HTTPException
-from services.router.app.dependencies import SettingsDI, LLMModelDI
+from services.router.app.dependencies import SettingsDI, LLMModelDI, DatabaseDI
+from services.router.app.database import Database
 from services.router.app.models import (
     ChatRequest,
     ChatResponse,
@@ -62,7 +63,8 @@ async def root(settings: SettingsDI):
 @router.post("/chat", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    llm_client: LLMModelDI
+    llm_client: LLMModelDI,
+    db: DatabaseDI
 ):
     """
     """
@@ -96,11 +98,10 @@ async def chat(
             tools_used.append(tool_name)
             
             tool_action = router_decision.action
-            db = None  # Mocked DB for now
             result = {}
             
             if isinstance(tool_action, GetAvailableDatesTool):
-                available_dates = get_available_dates(
+                available_dates = await get_available_dates(
                     db,
                     tool_action.preferred_dates,
                     tool_action.manicure_type
@@ -143,7 +144,7 @@ async def chat(
                 logger.info(f"Tool '{tool_name}' executed. Result: {result}")
                 
             elif isinstance(tool_action, CheckDateAvailabilityTool):
-                availability_check = check_date_availability(
+                availability_check = await check_date_availability(
                     db,
                     tool_action.manicure_type,
                     tool_action.date,
@@ -159,7 +160,6 @@ async def chat(
                 logger.info(f"Tool '{tool_name}' executed. Result: {result}")
                 
             elif isinstance(tool_action, BookVisitTool):
-                # First ensure user_order is updated with the booking information
                 if tool_action.manicure_type and (user_order.manicure_type != tool_action.manicure_type):
                     user_order.manicure_type = tool_action.manicure_type
                 if tool_action.date and (user_order.date != tool_action.date):
@@ -177,7 +177,7 @@ async def chat(
                         content=f"[TOOL RESULT - book_visit]: Cannot book. {completion_check['message']}. Please use 'update_user_order' tool first to store the booking information."
                     )
                 else:
-                    booking_result = book_visit(db, user_order, request.user_id)
+                    booking_result = await book_visit(db, user_order, request.user_id)
                     result = booking_result
                     
                     tool_result_message = Message(
@@ -187,7 +187,6 @@ async def chat(
                 
                 conversation_history.append(tool_result_message)
                 logger.info(f"Tool '{tool_name}' executed. Result: {result}")
-                # Break after successful booking to proceed to final answer
                 if result.get("status") == "confirmed":
                     display_conversation_history(conversation_history, f"Conversation History - After Iteration {iteration}")
                     break

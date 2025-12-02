@@ -1,55 +1,58 @@
 from services.router.app.models import AvailableManicureT, UserOrder
+from services.router.app.database import Database
+from services.router.app.db_models import AvailableSlot, Booking
+from sqlalchemy import select, and_
 from typing import Any
-from datetime import datetime, timedelta
+from datetime import datetime
+from loguru import logger
 
 
-def get_available_dates(
-    db: Any, 
+async def get_available_dates(
+    db: Database | None, 
     dates: list[str] | None, 
     manicure_type: AvailableManicureT | None
-) -> dict[str, list[str]]:
+) -> dict[str, Any]:
     """
     Get available dates based on desired dates and manicure type.
     
     Args:
-        db: Database connection (mocked for now)
-        dates: List of preferred dates from user (optional)
+        db: Database connection
+        dates: List of preferred dates from user (optional, format: YYYY-MM-DD)
         manicure_type: Type of manicure requested (optional)
     
     Returns:
         Dictionary with available dates and time slots
     """
-    # Mock implementation - in real scenario, this would query the database
-    # Generate mock available dates for the next 2 weeks
-    available_slots = []
-    base_date = datetime.now()
-    
-    # Generate time slots: 10:00, 12:00, 14:00, 16:00, 18:00
-    time_slots = ["10:00", "12:00", "14:00", "16:00", "18:00"]
-    
-    for day_offset in range(14):
-        current_date = base_date + timedelta(days=day_offset)
-        date_str = current_date.strftime("%Y-%m-%d")
-        
-        # Skip weekends for mock data
-        if current_date.weekday() < 5:  # Monday to Friday
-            for time_slot in time_slots:
-                available_slots.append(f"{date_str} {time_slot}")
-    
-    # Filter by preferred dates if provided
-    if dates:
-        filtered_slots = []
-        for slot in available_slots:
-            slot_date = slot.split()[0]
-            if slot_date in dates:
-                filtered_slots.append(slot)
-        available_slots = filtered_slots if filtered_slots else available_slots[:5]  # Fallback to first 5
-    
-    return {
-        "available_dates": available_slots[:10],  # Return first 10 slots
-        "manicure_type": manicure_type,
-        "total_available": len(available_slots)
-    }
+   
+    try:
+        async with db.get_session() as session:
+            stmt = select(AvailableSlot).where(AvailableSlot.is_available == True)
+            
+            if dates:
+                date_objects = [datetime.strptime(d, "%Y-%m-%d").date() for d in dates]
+                stmt = stmt.where(AvailableSlot.date.in_(date_objects))
+            
+            if manicure_type:
+                stmt = stmt.where(AvailableSlot.manicure_type == manicure_type)
+            
+            stmt = stmt.order_by(AvailableSlot.date, AvailableSlot.time_slot).limit(10)
+            
+            result = await session.execute(stmt)
+            slots = result.scalars().all()
+            
+            available_slots = [
+                f"{slot.date} {slot.time_slot}" 
+                for slot in slots
+            ]
+            
+            return {
+                "available_dates": available_slots,
+                "manicure_type": manicure_type,
+                "total_available": len(available_slots)
+            }
+    except Exception as e:
+        logger.error(f"Error querying available dates: {e}")
+        raise
 
 
 def check_if_all_fields_are_completed(user_order: UserOrder) -> dict[str, Any]:
@@ -126,8 +129,8 @@ def update_user_order(
     }
 
 
-def check_date_availability(
-    db: Any,
+async def check_date_availability(
+    db: Database | None,
     manicure_type: AvailableManicureT,
     date: str,
     time: str | None = None
@@ -136,7 +139,7 @@ def check_date_availability(
     Check if a specific date and time is available for a given manicure type.
     
     Args:
-        db: Database connection (mocked for now)
+        db: Database connection
         manicure_type: Type of manicure to check
         date: Date to check (format: YYYY-MM-DD)
         time: Specific time to check (format: HH:MM, optional)
@@ -144,51 +147,62 @@ def check_date_availability(
     Returns:
         Dictionary with availability status and available time slots
     """
-    # Mock implementation - in real scenario, this would query the database
-    # Generate mock available time slots for the given date
-    time_slots = ["10:00", "12:00", "14:00", "16:00", "18:00"]
     
-    # For mock: assume all dates are available with all time slots
-    # In real scenario, check database for bookings on this date
-    available_slots = [f"{date} {slot}" for slot in time_slots]
-    
-    is_date_available = len(available_slots) > 0
-    requested_time_available = None
-    is_available = is_date_available
-    
-    # If specific time was requested, check if it's in available slots
-    if time:
-        # Normalize time format (handle cases like "22:00", "2pm", etc.)
-        time_normalized = time.strip()
-        # Check if time matches any available slot (exact match or within range)
-        requested_time_available = time_normalized in time_slots
-        is_available = is_date_available and requested_time_available
-    
-    if time and requested_time_available is not None:
-        if requested_time_available:
-            message = f"Date {date} at {time} is available for {manicure_type} manicure."
-        else:
-            message = f"Date {date} is available, but time {time} is not available for {manicure_type} manicure. Available time slots: {', '.join(time_slots)}"
-    elif is_date_available:
-        message = f"Date {date} is available for {manicure_type} manicure. Available time slots: {', '.join(time_slots)}"
-    else:
-        message = f"Date {date} is not available for {manicure_type} manicure"
-    
-    return {
-        "is_available": is_available,
-        "is_date_available": is_date_available,
-        "requested_time_available": requested_time_available,
-        "date": date,
-        "time": time,
-        "manicure_type": manicure_type,
-        "available_slots": available_slots,
-        "available_time_slots": time_slots,
-        "message": message
-    }
+    try:
+        async with db.get_session() as session:
+            date_obj = datetime.strptime(date, "%Y-%m-%d").date()
+            
+            stmt = select(AvailableSlot).where(
+                and_(
+                    AvailableSlot.date == date_obj,
+                    AvailableSlot.manicure_type == manicure_type,
+                    AvailableSlot.is_available == True
+                )
+            ).order_by(AvailableSlot.time_slot)
+            
+            result = await session.execute(stmt)
+            slots = result.scalars().all()
+            
+            available_time_slots = [str(slot.time_slot) for slot in slots]
+            available_slots = [f"{date} {slot}" for slot in available_time_slots]
+            
+            is_date_available = len(available_time_slots) > 0
+            requested_time_available = None
+            is_available = is_date_available
+            
+            if time:
+                time_normalized = time.strip()
+                requested_time_available = time_normalized in available_time_slots
+                is_available = is_date_available and requested_time_available
+            
+            if time and requested_time_available is not None:
+                if requested_time_available:
+                    message = f"Date {date} at {time} is available for {manicure_type} manicure."
+                else:
+                    message = f"Date {date} is available, but time {time} is not available for {manicure_type} manicure. Available time slots: {', '.join(available_time_slots)}"
+            elif is_date_available:
+                message = f"Date {date} is available for {manicure_type} manicure. Available time slots: {', '.join(available_time_slots)}"
+            else:
+                message = f"Date {date} is not available for {manicure_type} manicure"
+            
+            return {
+                "is_available": is_available,
+                "is_date_available": is_date_available,
+                "requested_time_available": requested_time_available,
+                "date": date,
+                "time": time,
+                "manicure_type": manicure_type,
+                "available_slots": available_slots,
+                "available_time_slots": available_time_slots,
+                "message": message
+            }
+    except Exception as e:
+        logger.error(f"Error checking date availability: {e}")
+        raise
 
 
-def book_visit(
-    db: Any,
+async def book_visit(
+    db: Database | None,
     user_order: UserOrder,
     user_id: int
 ) -> dict[str, Any]:
@@ -196,21 +210,62 @@ def book_visit(
     Book a visit for the user.
     
     Args:
-        db: Database connection (mocked for now)
+        db: Database connection
         user_order: UserOrder with manicure_type and date
         user_id: User identifier
     
     Returns:
         Dictionary with booking confirmation details
     """
-    # Mock implementation - in real scenario, this would insert into database
     booking_id = f"BK{user_id}{datetime.now().strftime('%Y%m%d%H%M%S')}"
     
-    return {
-        "booking_id": booking_id,
-        "status": "confirmed",
-        "manicure_type": user_order.manicure_type,
-        "date": user_order.date,
-        "user_id": user_id,
-        "message": f"Your appointment for {user_order.manicure_type} manicure on {user_order.date} has been confirmed! Booking ID: {booking_id}"
-    }
+    try:
+        async with db.get_session() as session:
+            date_str = user_order.date
+            date_obj = None
+            time_slot_obj = None
+            
+            if " " in date_str:
+                date_part, time_part = date_str.split(" ", 1)
+                date_obj = datetime.strptime(date_part, "%Y-%m-%d").date()
+                time_slot_obj = datetime.strptime(time_part, "%H:%M").time()
+            else:
+                date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+            
+            booking = Booking(
+                booking_id=booking_id,
+                user_id=user_id,
+                manicure_type=user_order.manicure_type,
+                date=date_obj,
+                time_slot=time_slot_obj,
+                status="confirmed"
+            )
+            session.add(booking)
+            
+            if time_slot_obj:
+                stmt = select(AvailableSlot).where(
+                    and_(
+                        AvailableSlot.date == date_obj,
+                        AvailableSlot.time_slot == time_slot_obj,
+                        AvailableSlot.manicure_type == user_order.manicure_type
+                    )
+                )
+                result = await session.execute(stmt)
+                slot = result.scalar_one_or_none()
+                
+                if slot:
+                    slot.is_available = False
+            
+            await session.commit()
+            
+            return {
+                "booking_id": booking_id,
+                "status": "confirmed",
+                "manicure_type": user_order.manicure_type,
+                "date": user_order.date,
+                "user_id": user_id,
+                "message": f"Your appointment for {user_order.manicure_type} manicure on {user_order.date} has been confirmed! Booking ID: {booking_id}"
+            }
+    except Exception as e:
+        logger.error(f"Error booking visit: {e}")
+        raise
