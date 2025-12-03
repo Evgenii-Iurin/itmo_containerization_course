@@ -163,8 +163,9 @@ async def check_date_availability(
             result = await session.execute(stmt)
             slots = result.scalars().all()
             
-            available_time_slots = [str(slot.time_slot) for slot in slots]
-            available_slots = [f"{date} {slot}" for slot in available_time_slots]
+            # Format time slots as HH:MM (without seconds) for consistent comparison
+            available_time_slots = [slot.time_slot.strftime("%H:%M") for slot in slots]
+            available_slots = [f"{date} {slot}:00" for slot in available_time_slots]
             
             is_date_available = len(available_time_slots) > 0
             requested_time_available = None
@@ -172,6 +173,11 @@ async def check_date_availability(
             
             if time:
                 time_normalized = time.strip()
+                if ":" in time_normalized:
+                    parts = time_normalized.split(":")
+                    if len(parts) >= 2:
+                        time_normalized = f"{parts[0]}:{parts[1]}"
+                
                 requested_time_available = time_normalized in available_time_slots
                 is_available = is_date_available and requested_time_available
             
@@ -228,7 +234,11 @@ async def book_visit(
             if " " in date_str:
                 date_part, time_part = date_str.split(" ", 1)
                 date_obj = datetime.strptime(date_part, "%Y-%m-%d").date()
-                time_slot_obj = datetime.strptime(time_part, "%H:%M").time()
+                # Handle both "HH:MM" and "HH:MM:SS" formats
+                try:
+                    time_slot_obj = datetime.strptime(time_part, "%H:%M").time()
+                except ValueError:
+                    time_slot_obj = datetime.strptime(time_part, "%H:%M:%S").time()
             else:
                 date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
             
