@@ -1,7 +1,7 @@
 from services.router.app.models import AvailableManicureT, UserOrder
 from services.router.app.database import Database
 from services.router.app.db_models import AvailableSlot, Booking
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, distinct
 from typing import Any
 from datetime import datetime
 from loguru import logger
@@ -26,7 +26,11 @@ async def get_available_dates(
    
     try:
         async with db.get_session() as session:
-            stmt = select(AvailableSlot).where(AvailableSlot.is_available == True)
+            # Select distinct date and time_slot combinations
+            stmt = select(
+                AvailableSlot.date,
+                AvailableSlot.time_slot
+            ).where(AvailableSlot.is_available == True)
             
             if dates:
                 date_objects = [datetime.strptime(d, "%Y-%m-%d").date() for d in dates]
@@ -35,14 +39,16 @@ async def get_available_dates(
             if manicure_type:
                 stmt = stmt.where(AvailableSlot.manicure_type == manicure_type)
             
-            stmt = stmt.order_by(AvailableSlot.date, AvailableSlot.time_slot).limit(10)
+            # Get distinct date/time combinations
+            stmt = stmt.distinct().order_by(AvailableSlot.date, AvailableSlot.time_slot).limit(10)
             
             result = await session.execute(stmt)
-            slots = result.scalars().all()
+            rows = result.all()
             
+            # Format results as date + time strings
             available_slots = [
-                f"{slot.date} {slot.time_slot}" 
-                for slot in slots
+                f"{row.date} {row.time_slot}" 
+                for row in rows
             ]
             
             return {

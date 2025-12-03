@@ -4,22 +4,38 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: beauty_booking_postgres
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-booking_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-booking_password}
-      POSTGRES_DB: ${POSTGRES_DB:-beauty_booking}
+    env_file:
+      - path: .env.postgresql
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-booking_user}"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
       - beauty_booking_network
+
+  app:
+    build:
+      context: .
+      dockerfile: src/services/router/Dockerfile
+    container_name: beauty_booking_app
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file:
+      - path: .env
+      - path: .env.openai_model
+      - path: .env.postgresql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - beauty_booking_network
+    restart: unless-stopped
 
 volumes:
   postgres_data:

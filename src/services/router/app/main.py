@@ -32,10 +32,9 @@ async def lifespan(app: FastAPI):
 
         if model_provider == "openai":
             llm_client = OpenAPILLM(
-                model=settings.model.model,
-                api_key=settings.model.openai_api_key,
-                temperature=settings.model.temperature,
-                max_tokens=settings.model.max_tokens,
+                model=settings.llm_model.model,
+                api_key=settings.llm_model.openai_api_key,
+                temperature=settings.llm_model.temperature,
                 timeout=settings.llm_model_timeout
             )
             

@@ -56,7 +56,7 @@ async def root(settings: SettingsDI):
     return {
         "service": "router",
         "status": "running",
-        "llm_model_name": settings.model.model,
+        "llm_model_name": settings.llm_model.model,
     }
 
 

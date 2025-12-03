@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import model_validator
+from pydantic import model_validator, Field
 from typing import Literal
 from abc import ABC
 
@@ -20,8 +20,8 @@ class OpenAIConfig(BaseModelConfig):
     """OpenAI model configuration."""
     
     openai_api_key: str
-    model: str = "gpt-4o-mini"
-    temperature: float = 0.5
+    temperature: float
+    model: str
 
     model_config = SettingsConfigDict(
         env_file=".env.openai_model",
@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     llm_model_timeout: int = 120  # Longer timeout for generation
     
     model_provider: Literal["openai", "gigachat"] = "openai"
-    model: BaseModelConfig | None = None
+
+    llm_model: BaseModelConfig | None = Field(default=None, validation_alias=None)
     
-    # Database configuration
     postgres_user: str = "booking_user"
     postgres_password: str = "booking_password"
     postgres_db: str = "beauty_booking"
@@ -79,11 +79,11 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def load_model_config(self):
         """Load the appropriate model config based on model_provider."""
-        if self.model is None:
+        if self.llm_model is None:
             if self.model_provider == "openai":
-                self.model = OpenAIConfig()
+                self.llm_model = OpenAIConfig()
             elif self.model_provider == "gigachat":
-                self.model = GigachatConfig()
+                self.llm_model = GigachatConfig()
             else:
                 raise ValueError(f"Unknown model provider: {self.model_provider}")
         return self

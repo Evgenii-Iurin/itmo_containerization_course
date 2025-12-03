@@ -91,14 +91,9 @@ A bot that automates manicure appointment booking by letting clients choose serv
 
 **Main `.env` file:**
 ```bash
-MODEL_PROVIDER=openai  # or "gigachat"
-
-# Database configuration
-POSTGRES_USER=booking_user
-POSTGRES_PASSWORD=booking_password
-POSTGRES_DB=beauty_booking
-POSTGRES_HOST=localhost
+MODEL_PROVIDER=openai # or "gigachat"
 POSTGRES_PORT=5432
+LLM_MODEL_TIMEOUT=10
 ```
 
 **For OpenAI** - create `.env.openai_model`:
@@ -106,7 +101,6 @@ POSTGRES_PORT=5432
 OPENAI_API_KEY=sk-your-key
 MODEL=gpt-4o-mini
 TEMPERATURE=0.5
-MAX_TOKENS=
 ```
 
 **For GigaChat** - create `.env.gigachat_model`:
@@ -115,8 +109,16 @@ GIGACHAT_API_KEY=your-key
 GIGACHAT_CREDENTIALS=path-to-credentials
 MODEL=GigaChat-Pro
 TEMPERATURE=0.5
-MAX_TOKENS=
 ```
+
+**For PostgreSQL** - create `.env.postgresql`:
+```bash
+POSTGRES_USER=booking_user 
+POSTGRES_PASSWORD=booking_password 
+POSTGRES_DB=beauty_booking
+POSTGRES_HOST=postgres
+```
+
 
 ### Database Setup
 
@@ -154,3 +156,11 @@ uvicorn src.services.router.app.main:app --reload
 - **API Documentation**: http://localhost:8000/docs
 - **Main Interface**: http://localhost:8000
 - **Health Check**: http://localhost:8000/health
+
+
+## Run Docker Compose
+
+```
+docker-compose build --no-cache
+docker-compose up -d
+```
