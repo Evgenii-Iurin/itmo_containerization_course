@@ -19,6 +19,22 @@ services:
     networks:
       - beauty_booking_network
 
+  init:
+    build:
+      context: .
+      dockerfile: src/services/init/Dockerfile
+    container_name: beauty_booking_init
+    env_file:
+      - path: .env
+      - path: .env.openai_model
+      - path: .env.postgresql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - beauty_booking_network
+    restart: "no"  # Run once and exit
+
   app:
     build:
       context: .
@@ -33,6 +49,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      init:
+        condition: service_completed_successfully
     networks:
       - beauty_booking_network
     restart: unless-stopped
