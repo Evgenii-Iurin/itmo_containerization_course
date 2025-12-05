@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: beauty_booking_postgres
+    env_file:
+      - path: .env.postgresql
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - beauty_booking_network
+
+  init:
+    build:
+      context: .
+      dockerfile: src/services/init/Dockerfile
+    container_name: beauty_booking_init
+    env_file:
+      - path: .env
+      - path: .env.openai_model
+      - path: .env.postgresql
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - beauty_booking_network
+    restart: "no"  # Run once and exit
+
+  app:
+    build:
+      context: .
+      dockerfile: src/services/router/Dockerfile
+    command: ["uvicorn", "src.services.router.app.main:app", "--host", "0.0.0.0", "--port", "${APP_PORT}"]
+    container_name: beauty_booking_app
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+    env_file:
+      - path: .env
+      - path: .env.openai_model
+      - path: .env.postgresql
+    depends_on:
+      postgres:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+    networks:
+      - beauty_booking_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  beauty_booking_network:
+    driver: bridge
+
