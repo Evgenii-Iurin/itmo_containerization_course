@@ -1,0 +1,37 @@
+# ПЛОХОЙ Dockerfile - содержит несколько плохих практик
+# Этот Dockerfile работает, но демонстрирует антипаттерны
+
+# Плохая практика 1: Использование базового образа без указания конкретной версии
+FROM python:latest
+
+# Плохая практика 2: Установка ненужных пакетов для production
+RUN apt-get update && apt-get install -y \
+    vim \
+    curl \
+    wget \
+    git \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Плохая практика 3: Копирование всех файлов сразу (плохое кэширование слоёв)
+COPY . /app
+
+WORKDIR /app
+
+# Плохая практика 4: Установка зависимостей без очистки кэша pip
+RUN pip install poetry==2.2.1 && \
+    pip install --upgrade pip && \
+    poetry config virtualenvs.create false && \
+    poetry install --no-interaction --no-ansi --extras langchain
+
+# Плохая практика 5: Запуск от root пользователя (небезопасно)
+# Нет USER директивы - контейнер работает от root
+
+# Плохая практика 6: Не заданы переменные окружения для production
+# ENV не установлены
+
+EXPOSE 8000
+
+# Плохая практика 7: Хардкод порта в CMD вместо использования переменных окружения
+CMD ["uvicorn", "src.services.router.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
