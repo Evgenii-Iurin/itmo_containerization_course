@@ -1,4 +1,4 @@
-# Beaury Booking Assistant
+# Beauty Booking Assistant
 
 A bot that automates manicure appointment booking by letting clients choose services and available time slots while the system confirms and stores reservations automatically.
 
