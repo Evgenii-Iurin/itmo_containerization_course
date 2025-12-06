@@ -3,7 +3,7 @@ from services.router.app.database import Database
 from services.router.app.db_models import AvailableSlot, Booking
 from sqlalchemy import select, and_, distinct
 from typing import Any
-from datetime import datetime
+from datetime import datetime, date
 from loguru import logger
 
 
@@ -26,15 +26,33 @@ async def get_available_dates(
    
     try:
         async with db.get_session() as session:
+            # Get current date to filter out past dates
+            today = datetime.now().date()  # Use datetime.now().date() to avoid name conflict
+            
             # Select distinct date and time_slot combinations
             stmt = select(
                 AvailableSlot.date,
                 AvailableSlot.time_slot
-            ).where(AvailableSlot.is_available == True)
+            ).where(
+                and_(
+                    AvailableSlot.is_available == True,
+                    AvailableSlot.date >= today  # Filter out past dates
+                )
+            )
             
             if dates:
                 date_objects = [datetime.strptime(d, "%Y-%m-%d").date() for d in dates]
-                stmt = stmt.where(AvailableSlot.date.in_(date_objects))
+                # Only include dates that are not in the past
+                date_objects = [d for d in date_objects if d >= today]
+                if date_objects:
+                    stmt = stmt.where(AvailableSlot.date.in_(date_objects))
+                else:
+                    # If all requested dates are in the past, return empty result
+                    return {
+                        "available_dates": [],
+                        "manicure_type": manicure_type,
+                        "total_available": 0
+                    }
             
             if manicure_type:
                 stmt = stmt.where(AvailableSlot.manicure_type == manicure_type)
@@ -157,6 +175,21 @@ async def check_date_availability(
     try:
         async with db.get_session() as session:
             date_obj = datetime.strptime(date, "%Y-%m-%d").date()
+            today = datetime.now().date()  # Use datetime.now().date() to avoid name conflict with parameter 'date'
+            
+            # Reject past dates early
+            if date_obj < today:
+                return {
+                    "is_available": False,
+                    "is_date_available": False,
+                    "requested_time_available": None,
+                    "date": date,
+                    "time": time,
+                    "manicure_type": manicure_type,
+                    "available_slots": [],
+                    "available_time_slots": [],
+                    "message": f"Date {date} is in the past. Please select a future date."
+                }
             
             stmt = select(AvailableSlot).where(
                 and_(
